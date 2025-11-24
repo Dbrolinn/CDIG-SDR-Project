@@ -230,27 +230,25 @@ This block is a standard GNU Radio utility that acts as a grouper or buffer.
 
 # Week 5
 
-This week, we examined the Phase Offset Correction mechanism detailed in Section 2.5 and implemented within the `frame_equalizer_impl.cc` file. We analyzed how hardware imperfections—specifically Sampling Clock Offset (SFO) and Carrier Frequency Offset (CFO)—manifest as phase slope and common phase error, respectively. The study dissected the Frame Equalizer's three-stage algorithm, which models phase error as a linear equation. This process involves pre-correcting the "slope" based on accumulated drift, determining the "intercept" using pilot subcarriers to remove Common Phase Error (CPE), and employing a feedback loop to refine the residual timing drift estimate for subsequent symbols.
+This week, we examined the Phase Offset Correction mechanism detailed in Section 2.5 and implemented within the frame_equalizer_impl.cc file. We analyzed how hardware imperfections—specifically Sampling Clock Offset (SFO) and Carrier Frequency Offset (CFO)—manifest as phase slope and common phase error, respectively. The study dissected the Frame Equalizer's three-stage algorithm, which models phase error as a linear equation. This process involves pre-correcting the "slope" based on accumulated drift, determining the "intercept" using pilot subcarriers to remove Common Phase Error (CPE), and employing a feedback loop to refine the residual timing drift estimate for subsequent symbols.
 
 ---
-
-# Phase Offset Correction in IEEE 802.11 Receiver
 
 ## Analysis of Section 2.5 and frame_equalizer_impl.cc
 
 The frame equalizer, and therefore this file, provides a comprehensive explanation of the Phase Offset Correction mechanism used in the GNU Radio IEEE 802.11 receiver.
 
-## 1. Why do you need to correct the phase?
+### 1. Why do you need to correct the phase?
 
 According to Section 2.5 of the paper, phase correction is required to counteract two specific hardware imperfections that occur when the sender and receiver clocks are not perfectly synchronized.
 
-### Sampling Clock Offset (SFO)
+**Sampling Clock Offset (SFO)**
 
 The receiver's clock ticks slightly faster or slower than the sender's.
 * **Effect:** This causes a timing delay that accumulates over the duration of the packet, which can lead to the receiver not being able to decode the message.
 * **Visual:** In the frequency domain, a time delay manifests as a **Phase Slope**. Low frequencies rotate a little; high frequencies rotate a lot. The constellation twists into a spiral.
 
-### Carrier Frequency Offset (CFO)
+**Carrier Frequency Offset (CFO)**
 
 The receiver's center frequency is slightly off.
 * **Effect:** This causes a constant phase rotation for every subcarrier equally.
@@ -258,14 +256,15 @@ The receiver's center frequency is slightly off.
 
 If these are not corrected, the constellation points will rotate out of their target zones, causing bit errors.
 
-## 2. Find the code that estimates the phase offset (SEE)
+### 2. Find the code that estimates the phase offset
 
 The logic is located in the Frame Equalizer block.
-* **File:** `lib/frame_equalizer_impl.cc`
-* **Function:** `frame_equalizer_impl::general_work`
+
+**File:** `lib/frame_equalizer_impl.cc`
+
+**Function:** `frame_equalizer_impl::general_work`
 
 Specifically, the estimation and correction happen inside the main loop iterating over symbols:
-
 ```cpp
 // in frame_equalizer_impl.cc, general_work function
 
@@ -284,3 +283,127 @@ while ((i < ninput_items[0]) && (o < noutput_items)) {
     d_er = (1 - alpha) * d_er + alpha * er;
 
 }
+```
+
+### 3. How are you correcting the phase?
+
+The correction is applied in a two-step process (Linear Regression model) followed by a feedback update. The code treats the phase error $\Phi_k$ for subcarrier $k$ as a line equation:
+
+$$\Phi_k = \text{Slope} \times k + \text{Intercept}$$
+
+Where the **Slope** is the iteration drifting error, and the **Intercept** is beta which is calculated every symbol.
+
+#### Step A: Correcting the Slope (Sampling Offset)
+
+Before measuring the pilots, the code corrects the symbol based on the estimated clock drift, using:
+```cpp
+for (int i = 0; i < 64; i++) {
+    current_symbol[i] *= exp(gr_complex(0, 2 * M_PI * d_current_symbol * 80 * (d_epsilon0 + d_er) * (i - 32) / 64));
+}
+```
+
+This applies a phase rotation $e^{j\theta}$ to every subcarrier $i$.
+
+* **`(2 * M_PI)`:** Converts the result into Radians.
+* **`d_current_symbol * 80` (Time):** This calculates the Physical Time elapsed. An OFDM symbol is 64 samples (Data) + 16 samples (Cyclic Prefix). Even though the Cyclic Prefix is removed before this block, the physical clock drifted during those 16 samples, so using 64 here would under-correct the error.
+* **`d_epsilon0 + d_er` (Drift Rate $\epsilon$):**
+  * `d_epsilon0`: The coarse initial estimate calculated from the Preamble.
+  * `d_er`: The fine residual estimate tracked by the loop (starts at 0).
+* **`(i - 32) / 64` (Frequency $f$):**
+  * `i - 32`: Shifts the index so 0 is the center (DC). Range becomes -32 to +31.
+  * `/ 64`: Normalizes the frequency to the bandwidth.
+
+**Equation Implemented:**
+
+$$S_k' = S_k \cdot e^{j 2\pi \cdot N_{\text{sym}} \cdot 80 \cdot (\epsilon_0 + \epsilon_r) \cdot (k/64)}$$
+
+#### Step B: Estimation and Correction of Intercept (CPE)
+
+Now that the "slope" is flattened, the code calculates the "intercept" (the average rotation) using the 4 Pilot Subcarriers.
+```cpp
+// 1. Calculate Beta (Intercept)
+double beta = arg((current_symbol[11] * p) + (current_symbol[39] * p) +
+                  (current_symbol[25] * p) + (current_symbol[53] * -p));
+
+// 2. Apply Correction
+for (int i = 0; i < 64; i++) {
+    current_symbol[i] *= exp(gr_complex(0, -beta));
+}
+```
+
+* **Descrambling (`* p`):** The pilots are transmitted with a pseudo-random polarity $p \in \{1, -1\}$. Multiplying by $p$ removes this randomness.
+  * $\text{Recv}_p = (\text{Pilot} \times p) \times p = \text{Pilot} \times p^2 = \text{Pilot} \times 1$
+* **Inverting Pilot 53 (`* -p`):** The IEEE 802.11 standard defines the pilot values as $\{1, 1, 1, -1\}$. The last pilot (Index 53) is natively negative. To average them constructively, we must flip it back by multiplying by $-p$.
+* **`arg(...)`:** This sums the 4 descrambled pilot vectors and calculates the angle of the resulting sum vector. This angle $\beta$ represents the Common Phase Error (CPE).
+* **Correction:** The code rotates the entire symbol by $-\beta$ to align the constellation with the real axis.
+
+#### Step C: The Feedback Loop (Refining the Slope)
+
+Finally, the code checks if the "Slope" correction applied in Step A was perfect. Even after correcting the Phase Slope and the Intercept, a tiny residual Sampling Frequency Offset (SFO) might remain. The receiver tracks this by comparing the current pilots against the previous symbol's pilots.
+
+**The Code:**
+```cpp
+// 1. Measure Instantaneous Phase Drift (radians)
+double er = arg((conj(d_prev_pilots[0]) * current_symbol[11] * p) + ... );
+
+// 2. Convert Phase Drift to Clock Error Ratio (dimensionless)
+er *= d_bw / (2 * M_PI * d_freq * 80);
+
+// 3. Update the Slope Tracker (IIR Filter)
+d_er = (1 - alpha) * d_er + alpha * er;
+
+// 4. Save current pilots for the next iteration
+d_prev_pilots[...] = current_symbol[...] * p;
+```
+
+**1. Measuring Phase Drift (`arg(...)`)**
+
+The code calculates the phase difference between the pilots of the current symbol and the pilots of the previous symbol.
+* **Method:** Multiplying a complex number by the Complex Conjugate (`conj`) of another calculates the angle difference between them.
+* **Logic:** If the "Slope" correction in Step A was perfect, the pilots would be perfectly stationary from one symbol to the next (after removing the SFO rotation). If the pilots have rotated relative to the previous symbol, it means the clock drift estimate (`d_er`) is slightly off and needs adjustment.
+
+**2. Scaling Factor (The Physical Derivation)**
+
+The value calculated above (`er`) is an angle in Radians. However, the variable we need to update (`d_er`) represents a Clock Error Ratio. To convert the measured angle into a clock error, we invert the physics of the system.
+
+The Physics Chain:
+Hardware Crystal Error ($\epsilon$) → Frequency Offset ($\Delta f$) → Phase Rotation ($\Delta \Phi$).
+
+The relationship is defined by:
+
+$$\Delta \Phi = 2\pi \times \Delta f \times T_{\text{symbol}}$$
+
+Substituting Variables:
+* **Frequency Offset:** $\Delta f = f_{\text{carrier}} \times \epsilon$
+* **Symbol Duration:** $T_{\text{symbol}} = \text{Samples}/\text{Bandwidth} = 80/BW$
+
+**The Combined Equation:**
+
+$$\Delta \Phi = 2\pi \times (f_{\text{carrier}} \times \epsilon) \times \frac{80}{BW}$$
+
+**Solving for Error ($\epsilon$):**
+
+We isolate $\epsilon$ to find the scaling factor used in the code:
+
+$$\epsilon = \Delta \Phi \times \frac{BW}{2\pi \times f_{\text{carrier}} \times 80}$$
+
+**Code Implementation:**
+
+This matches the code line exactly:
+```cpp
+er *= d_bw / (2 * M_PI * d_freq * 80);
+```
+
+**3. The Update Loop (Low Pass Filter)**
+
+The calculated `er` is the instantaneous error for just this one symbol. Because wireless channels are noisy, we do not simply overwrite `d_er`. Instead, we use an Infinite Impulse Response (IIR) filter (also known as an Exponential Moving Average).
+* **Formula:** `d_er = (1 - alpha) * d_er + alpha * er;`
+* **Behavior:** `alpha` is a small gain factor (e.g., 0.001). This allows the loop to slowly converge on the true clock drift while smoothing out random noise spikes.
+
+### Summary of Values Changed
+
+* **`current_symbol` (Data):** Modified twice. First to remove the frequency-dependent twist (SFO slope) in Step A, and second to remove the constant rotation (CPE intercept) in Step B.
+* **`d_er` (State):** Updated every symbol to track the changing time drift. This value is carried over to Step A of the next symbol.
+* **`d_prev_pilots` (State):** The current pilots are saved to serve as the reference for the next iteration.
+
+---
