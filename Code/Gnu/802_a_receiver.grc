@@ -185,7 +185,7 @@ blocks:
     alias: ''
     begin_tag: pmt.PMT_NIL
     comment: ''
-    file: "/home/lucasa/\xC1rea de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample2_20MHz_Channel6.bin"
+    file: "/home/lucasa/\xC1rea de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample3_20MHz_Channel100.bin"
     length: '0'
     maxoutbuf: '0'
     minoutbuf: '0'

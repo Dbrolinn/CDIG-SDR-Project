@@ -190,7 +190,7 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.fft_vxx_0 = fft.fft_vcc(64, True, window.hamming(64), True, 1)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 64)
         self.blocks_multiply_xx_0 = blocks.multiply_vcc(1)
-        self.blocks_file_source_0 = blocks.file_source(gr.sizeof_gr_complex*1, '/home/lucasa/Área de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample2_20MHz_Channel6.bin', True, 0, 0)
+        self.blocks_file_source_0 = blocks.file_source(gr.sizeof_gr_complex*1, '/home/lucasa/Área de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample3_20MHz_Channel100.bin', True, 0, 0)
         self.blocks_file_source_0.set_begin_tag(pmt.PMT_NIL)
         self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, '/home/lucasa/Área de Trabalho/CDIG/test.pcap', False)
         self.blocks_file_sink_0.set_unbuffered(True)
