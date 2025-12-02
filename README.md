@@ -407,3 +407,62 @@ The calculated `er` is the instantaneous error for just this one symbol. Because
 * **`d_prev_pilots` (State):** The current pilots are saved to serve as the reference for the next iteration.
 
 ---
+# Week 6
+
+This week, we advanced to the final stages of the physical layer processing before payload decoding. We analyzed **Channel Estimation (Section 2.6)**, specifically focusing on magnitude correction and its critical role in higher-order modulation schemes like QAM. We identified the specific limitations of the current implementation regarding magnitude assumptions. Furthermore, we examined **Signal Field Decoding (Section 2.7)**, understanding how the receiver extracts metadata (Length and MCS) from the first symbol following the preamble and uses Stream Tagging to pass this configuration to the MAC decoder. Finally, we made practical modifications to the GNU Radio flowgraph to address errors and optimize performance.
+
+---
+
+## Analysis of Channel Estimation (Section 2.6)
+
+While the previous week focused on correcting the *phase* (rotation) of the subcarriers, this week's analysis focused on correcting the *magnitude* (amplitude). This logic is typically housed within the same `OFDM Equalize Symbols` block.
+
+### 1. Why do we need Magnitude Correction?
+
+In Phase Shift Keying (PSK) modulations like BPSK or QPSK, information is carried entirely in the phase of the signal; the amplitude is constant. However, for higher data rates, IEEE 802.11 uses **Quadrature Amplitude Modulation (QAM)**, specifically 16-QAM and 64-QAM.
+
+* **The Physics:** In QAM, the distance of a constellation point from the origin (its magnitude) carries bits of information.
+* **The Problem:** Hardware filters (imperfect channel filters) or multipath fading can attenuate certain subcarriers more than others. If the receiver does not "equalize" these magnitudes (i.e., amplify the weak ones and attenuate the strong ones), the constellation points will fall into the wrong decision boundaries.
+* **Paper Reference:** The authors state that magnitude correction is "especially important if QAM-16 or QAM-64 encoding is utilized, where also the magnitude carries information" [cite: 2491246.2491248.pdf].
+
+
+
+### 2. Implementation and Limitations
+
+We analyzed the specific approach taken by the authors for magnitude correction and found it to be a simplified model rather than a full Least Squares (LS) channel estimation.
+
+* **Assumption:** The implementation assumes the magnitude distortion follows a specific "sinc-shaped" curve, likely caused by the hardware filters of the USRP/daughterboard [cite: 2491246.2491248.pdf].
+* **Correction:** Instead of estimating the channel magnitude per subcarrier using the preamble, the block corrects based on this static sinc-shape assumption.
+* **The Limitation:** The authors explicitly note that this static assumption is not robust. They observed that the shape "depend[s] also on the sender" (e.g., different WiFi cards have different filter shapes) [cite: 2491246.2491248.pdf].
+* **Impact:** Because this magnitude equalization is not adaptive, it is currently insufficient for distinguishing the amplitude levels of complex constellations. Consequently, this limitation **"restricts our receiver to BPSK and QPSK modulations"** [cite: 2491246.2491248.pdf].
+
+### 3. Subcarrier Subsetting
+
+This block performs one final data-formatting task. The FFT outputs 64 subcarriers, but not all contain data. The Equalizer block removes the non-data subcarriers:
+* **Inputs:** 64 Complex Samples (Data + Pilots + Guard + DC).
+* **Action:** It strips out the 4 Pilot subcarriers (used for phase tracking), the 11 Guard subcarriers (edges), and the DC subcarrier (center).
+* **Outputs:** 48 Complex Samples (Data only) [cite: 2491246.2491248.pdf].
+
+---
+
+## Analysis of Signal Field Decoding (Section 2.7)
+
+After the preamble (Short + Long) is processed, the very first data symbol in the frame structure is the **SIGNAL Field**. We analyzed the `OFDM Decode Signal` block to understand how the receiver configures itself for the payload.
+
+### 1. Block Function and Objective
+
+The objective of this block is to decode the "header" of the physical layer to answer two questions: *How long is this packet?* and *How is it encoded?*
+
+* **Robustness:** The Signal Field is *always* encoded using **BPSK modulation** with a coding rate of **1/2** [cite: 2491246.2491248.pdf]. This is the most robust modulation available in 802.11, ensuring that even if the channel is too noisy for high-speed data (like 54 Mbps), the receiver can still decode the header.
+* **Library:** The paper notes that the project utilizes the **IT++ library** to handle the convolutional decoding required for this field [cite: 2491246.2491248.pdf].
+
+### 2. The Tagging Mechanism
+
+This block is the bridge between the physical layer and the MAC layer. It employs the **Stream Tagging** feature of GNU Radio to pass metadata downstream.
+
+1.  **Decode:** The block demodulates the BPSK symbol and decodes the bits.
+2.  **Validate:** It checks the parity bit to ensure the Signal Field was decoded correctly.
+3.  **Tag:** If valid, it attaches a tag to the sample stream.
+    * **Tag Content:** A tuple containing `{Encoding Scheme, Frame Length}`.
+4.  **Downstream Usage:** The subsequent block (`OFDM Decode MAC`) reads this tag to dynamically reconfigure its demodulator (e.g., switching from BPSK to QPSK) and its length counters for the payload that follows [cite: 2491246.2491248.pdf].
+
