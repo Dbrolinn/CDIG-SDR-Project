@@ -23,13 +23,13 @@ if __name__ == '__main__':
 
 from PyQt5 import Qt
 from gnuradio import qtgui
-from gnuradio.filter import firdes
 import sip
 from gnuradio import blocks
 import pmt
 from gnuradio import fft
 from gnuradio.fft import window
 from gnuradio import filter
+from gnuradio.filter import firdes
 from gnuradio import gr
 import sys
 import signal
@@ -87,63 +87,15 @@ class Project808a(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
 
-        self.qtgui_time_sink_x_0 = qtgui.time_sink_f(
-            1024, #size
-            1, #samp_rate
-            "autocorrelation normalized", #name
-            1, #number of inputs
-            None # parent
-        )
-        self.qtgui_time_sink_x_0.set_update_time(0.10)
-        self.qtgui_time_sink_x_0.set_y_axis(0, 1)
-
-        self.qtgui_time_sink_x_0.set_y_label('Amplitude', "")
-
-        self.qtgui_time_sink_x_0.enable_tags(True)
-        self.qtgui_time_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, 0, "")
-        self.qtgui_time_sink_x_0.enable_autoscale(False)
-        self.qtgui_time_sink_x_0.enable_grid(False)
-        self.qtgui_time_sink_x_0.enable_axis_labels(True)
-        self.qtgui_time_sink_x_0.enable_control_panel(False)
-        self.qtgui_time_sink_x_0.enable_stem_plot(False)
-
-
-        labels = ['Signal 1', 'Signal 2', 'Signal 3', 'Signal 4', 'Signal 5',
-            'Signal 6', 'Signal 7', 'Signal 8', 'Signal 9', 'Signal 10']
-        widths = [1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1]
-        colors = ['blue', 'red', 'green', 'black', 'cyan',
-            'magenta', 'yellow', 'dark red', 'dark green', 'dark blue']
-        alphas = [1.0, 1.0, 1.0, 1.0, 1.0,
-            1.0, 1.0, 1.0, 1.0, 1.0]
-        styles = [1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1]
-        markers = [-1, -1, -1, -1, -1,
-            -1, -1, -1, -1, -1]
-
-
-        for i in range(1):
-            if len(labels[i]) == 0:
-                self.qtgui_time_sink_x_0.set_line_label(i, "Data {0}".format(i))
-            else:
-                self.qtgui_time_sink_x_0.set_line_label(i, labels[i])
-            self.qtgui_time_sink_x_0.set_line_width(i, widths[i])
-            self.qtgui_time_sink_x_0.set_line_color(i, colors[i])
-            self.qtgui_time_sink_x_0.set_line_style(i, styles[i])
-            self.qtgui_time_sink_x_0.set_line_marker(i, markers[i])
-            self.qtgui_time_sink_x_0.set_line_alpha(i, alphas[i])
-
-        self._qtgui_time_sink_x_0_win = sip.wrapinstance(self.qtgui_time_sink_x_0.qwidget(), Qt.QWidget)
-        self.top_layout.addWidget(self._qtgui_time_sink_x_0_win)
         self.qtgui_const_sink_x_0_0 = qtgui.const_sink_c(
-            512, #size
+            1024, #size
             "constellation after frame equalizer", #name
             1, #number of inputs
             None # parent
         )
-        self.qtgui_const_sink_x_0_0.set_update_time(0.10)
-        self.qtgui_const_sink_x_0_0.set_y_axis((-40), 40)
-        self.qtgui_const_sink_x_0_0.set_x_axis((-10), 10)
+        self.qtgui_const_sink_x_0_0.set_update_time(1)
+        self.qtgui_const_sink_x_0_0.set_y_axis((-1.5), 1.5)
+        self.qtgui_const_sink_x_0_0.set_x_axis((-1.5), 1.5)
         self.qtgui_const_sink_x_0_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, "")
         self.qtgui_const_sink_x_0_0.enable_autoscale(False)
         self.qtgui_const_sink_x_0_0.enable_grid(True)
@@ -178,16 +130,16 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.top_layout.addWidget(self._qtgui_const_sink_x_0_0_win)
         self.pdu_pdu_to_tagged_stream_0 = pdu.pdu_to_tagged_stream(gr.types.complex_t, 'packet_len')
         self.ieee802_11_sync_short_0 = ieee802_11.sync_short(0.8, 2, False, False)
-        self.ieee802_11_sync_long_0 = ieee802_11.sync_long(240, True, False)
-        self.ieee802_11_parse_mac_0 = ieee802_11.parse_mac(False, True)
+        self.ieee802_11_sync_long_0 = ieee802_11.sync_long(240, False, False)
+        self.ieee802_11_parse_mac_0 = ieee802_11.parse_mac(False, False)
         self.ieee802_11_frame_equalizer_0 = ieee802_11.frame_equalizer(ieee802_11.LS, 5800000000, 20000000, False, False)
-        self.ieee802_11_decode_mac_0 = ieee802_11.decode_mac(False, True)
+        self.ieee802_11_decode_mac_0 = ieee802_11.decode_mac(False, False)
         self.foo_wireshark_connector_0 = foo.wireshark_connector(127, False)
         self.fir_filter_xxx_1 = filter.fir_filter_ccc(1, [1]*window_size)
         self.fir_filter_xxx_1.declare_sample_delay(0)
         self.fir_filter_xxx_0 = filter.fir_filter_fff(1, [1]*window_size)
         self.fir_filter_xxx_0.declare_sample_delay(0)
-        self.fft_vxx_0 = fft.fft_vcc(64, True, window.hamming(64), True, 1)
+        self.fft_vxx_0 = fft.fft_vcc(64, True, window.rectangular(64), True, 1)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 64)
         self.blocks_multiply_xx_0 = blocks.multiply_vcc(1)
         self.blocks_file_source_0 = blocks.file_source(gr.sizeof_gr_complex*1, '/home/lucasa/Área de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample3_20MHz_Channel100.bin', True, 0, 0)
@@ -215,7 +167,6 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.connect((self.blocks_delay_0, 0), (self.ieee802_11_sync_short_0, 0))
         self.connect((self.blocks_delay_1, 0), (self.ieee802_11_sync_long_0, 1))
         self.connect((self.blocks_divide_xx_0, 0), (self.ieee802_11_sync_short_0, 2))
-        self.connect((self.blocks_divide_xx_0, 0), (self.qtgui_time_sink_x_0, 0))
         self.connect((self.blocks_file_source_0, 0), (self.blocks_complex_to_mag_squared_0, 0))
         self.connect((self.blocks_file_source_0, 0), (self.blocks_delay_0, 0))
         self.connect((self.blocks_file_source_0, 0), (self.blocks_multiply_xx_0, 1))
