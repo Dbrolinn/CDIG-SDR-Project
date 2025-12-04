@@ -86,7 +86,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [392, 408.0]
+    coordinate: [384, 408.0]
     rotation: 0
     state: true
 - name: blocks_conjugate_cc_0
@@ -120,7 +120,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [400, 80.0]
+    coordinate: [384, 80.0]
     rotation: 0
     state: true
 - name: blocks_delay_1
@@ -167,7 +167,7 @@ blocks:
     alias: ''
     append: 'False'
     comment: ''
-    file: "/home/lucasa/\xC1rea de Trabalho/CDIG/test.pcap"
+    file: "/home/lucasa/\xC1rea de Trabalho/CDIG/Github_with_miguel/CDIG-SDR-Project/Code/test.pcap"
     type: byte
     unbuffered: 'True'
     vlen: '1'
@@ -175,30 +175,8 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [24, 456.0]
+    coordinate: [64, 456.0]
     rotation: 180
-    state: true
-- name: blocks_file_source_0
-  id: blocks_file_source
-  parameters:
-    affinity: ''
-    alias: ''
-    begin_tag: pmt.PMT_NIL
-    comment: ''
-    file: "/home/lucasa/\xC1rea de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample3_20MHz_Channel100.bin"
-    length: '0'
-    maxoutbuf: '0'
-    minoutbuf: '0'
-    offset: '0'
-    repeat: 'True'
-    type: complex
-    vlen: '1'
-  states:
-    bus_sink: false
-    bus_source: false
-    bus_structure: null
-    coordinate: [128, 216.0]
-    rotation: 0
     state: true
 - name: blocks_multiply_xx_0
   id: blocks_multiply_xx
@@ -291,7 +269,7 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1064, 392.0]
+    coordinate: [936, 392.0]
     rotation: 0
     state: true
 - name: fir_filter_xxx_1
@@ -356,7 +334,7 @@ blocks:
     bw: '20000000'
     comment: ''
     debug: 'False'
-    freq: '5800000000'
+    freq: '2412000000'
     log: 'False'
     maxoutbuf: '0'
     minoutbuf: '0'
@@ -419,6 +397,37 @@ blocks:
     bus_source: false
     bus_structure: null
     coordinate: [1648, 88.0]
+    rotation: 0
+    state: true
+- name: iio_pluto_source_0
+  id: iio_pluto_source
+  parameters:
+    affinity: ''
+    alias: ''
+    bandwidth: '20000000'
+    bbdc: 'True'
+    buffer_size: '32768'
+    comment: ''
+    filter: ''
+    filter_source: '''Auto'''
+    fpass: '0'
+    frequency: '2412000000'
+    fstop: '0'
+    gain1: '''slow_attack'''
+    len_tag_key: packet_len
+    manual_gain1: '64'
+    maxoutbuf: '0'
+    minoutbuf: '0'
+    quadrature: 'True'
+    rfdc: 'True'
+    samplerate: samp_rate
+    type: fc32
+    uri: ''
+  states:
+    bus_sink: false
+    bus_source: false
+    bus_structure: null
+    coordinate: [128, 172.0]
     rotation: 0
     state: true
 - name: pdu_pdu_to_tagged_stream_0
@@ -508,7 +517,7 @@ blocks:
     tr_slope: qtgui.TRIG_SLOPE_POS
     tr_tag: '""'
     type: complex
-    update_time: '1'
+    update_time: '0.8'
     width1: '1'
     width10: '1'
     width2: '1'
@@ -600,7 +609,7 @@ blocks:
     tr_slope: qtgui.TRIG_SLOPE_POS
     tr_tag: '""'
     type: complex
-    update_time: '0.50'
+    update_time: '0.8'
     width1: '1'
     width10: '1'
     width2: '1'
@@ -611,10 +620,10 @@ blocks:
     width7: '1'
     width8: '1'
     width9: '1'
-    xmax: '10'
-    xmin: '-10'
-    ymax: '40'
-    ymin: '-40'
+    xmax: '0.2'
+    xmin: '-0.2'
+    ymax: '0.5'
+    ymin: '-0.5'
   states:
     bus_sink: false
     bus_source: false
@@ -692,8 +701,8 @@ blocks:
     style9: '1'
     tr_chan: '0'
     tr_delay: '0'
-    tr_level: '0.0'
-    tr_mode: qtgui.TRIG_MODE_FREE
+    tr_level: '1.0'
+    tr_mode: qtgui.TRIG_MODE_NORM
     tr_slope: qtgui.TRIG_SLOPE_POS
     tr_tag: '""'
     type: float
@@ -716,9 +725,9 @@ blocks:
     bus_sink: false
     bus_source: false
     bus_structure: null
-    coordinate: [1408, 464.0]
+    coordinate: [1384, 456.0]
     rotation: 180
-    state: disabled
+    state: enabled
 
 connections:
 - [blocks_complex_to_mag_0, '0', blocks_divide_xx_0, '0']
@@ -729,9 +738,6 @@ connections:
 - [blocks_delay_1, '0', ieee802_11_sync_long_0, '1']
 - [blocks_divide_xx_0, '0', ieee802_11_sync_short_0, '2']
 - [blocks_divide_xx_0, '0', qtgui_time_sink_x_0, '0']
-- [blocks_file_source_0, '0', blocks_complex_to_mag_squared_0, '0']
-- [blocks_file_source_0, '0', blocks_delay_0, '0']
-- [blocks_file_source_0, '0', blocks_multiply_xx_0, '1']
 - [blocks_multiply_xx_0, '0', fir_filter_xxx_1, '0']
 - [blocks_stream_to_vector_0, '0', fft_vxx_0, '0']
 - [blocks_vector_to_stream_0, '0', qtgui_const_sink_x_0_0_0, '0']
@@ -748,6 +754,9 @@ connections:
 - [ieee802_11_sync_long_0, '0', blocks_stream_to_vector_0, '0']
 - [ieee802_11_sync_short_0, '0', blocks_delay_1, '0']
 - [ieee802_11_sync_short_0, '0', ieee802_11_sync_long_0, '0']
+- [iio_pluto_source_0, '0', blocks_complex_to_mag_squared_0, '0']
+- [iio_pluto_source_0, '0', blocks_delay_0, '0']
+- [iio_pluto_source_0, '0', blocks_multiply_xx_0, '1']
 - [pdu_pdu_to_tagged_stream_0, '0', qtgui_const_sink_x_0_0, '0']
 
 metadata:

@@ -23,13 +23,12 @@ if __name__ == '__main__':
 
 from PyQt5 import Qt
 from gnuradio import qtgui
+from gnuradio.filter import firdes
 import sip
 from gnuradio import blocks
-import pmt
 from gnuradio import fft
 from gnuradio.fft import window
 from gnuradio import filter
-from gnuradio.filter import firdes
 from gnuradio import gr
 import sys
 import signal
@@ -37,6 +36,7 @@ from argparse import ArgumentParser
 from gnuradio.eng_arg import eng_float, intx
 from gnuradio import eng_notation
 from gnuradio import gr, pdu
+from gnuradio import iio
 import foo
 import ieee802_11
 
@@ -87,13 +87,102 @@ class Project808a(gr.top_block, Qt.QWidget):
         # Blocks
         ##################################################
 
+        self.qtgui_time_sink_x_0 = qtgui.time_sink_f(
+            1024, #size
+            1, #samp_rate
+            "autocorrelation normalized", #name
+            1, #number of inputs
+            None # parent
+        )
+        self.qtgui_time_sink_x_0.set_update_time(0.10)
+        self.qtgui_time_sink_x_0.set_y_axis(0, 1)
+
+        self.qtgui_time_sink_x_0.set_y_label('Amplitude', "")
+
+        self.qtgui_time_sink_x_0.enable_tags(True)
+        self.qtgui_time_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_NORM, qtgui.TRIG_SLOPE_POS, 1.0, 0, 0, "")
+        self.qtgui_time_sink_x_0.enable_autoscale(False)
+        self.qtgui_time_sink_x_0.enable_grid(False)
+        self.qtgui_time_sink_x_0.enable_axis_labels(True)
+        self.qtgui_time_sink_x_0.enable_control_panel(False)
+        self.qtgui_time_sink_x_0.enable_stem_plot(False)
+
+
+        labels = ['Signal 1', 'Signal 2', 'Signal 3', 'Signal 4', 'Signal 5',
+            'Signal 6', 'Signal 7', 'Signal 8', 'Signal 9', 'Signal 10']
+        widths = [1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1]
+        colors = ['blue', 'red', 'green', 'black', 'cyan',
+            'magenta', 'yellow', 'dark red', 'dark green', 'dark blue']
+        alphas = [1.0, 1.0, 1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0, 1.0, 1.0]
+        styles = [1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1]
+        markers = [-1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1]
+
+
+        for i in range(1):
+            if len(labels[i]) == 0:
+                self.qtgui_time_sink_x_0.set_line_label(i, "Data {0}".format(i))
+            else:
+                self.qtgui_time_sink_x_0.set_line_label(i, labels[i])
+            self.qtgui_time_sink_x_0.set_line_width(i, widths[i])
+            self.qtgui_time_sink_x_0.set_line_color(i, colors[i])
+            self.qtgui_time_sink_x_0.set_line_style(i, styles[i])
+            self.qtgui_time_sink_x_0.set_line_marker(i, markers[i])
+            self.qtgui_time_sink_x_0.set_line_alpha(i, alphas[i])
+
+        self._qtgui_time_sink_x_0_win = sip.wrapinstance(self.qtgui_time_sink_x_0.qwidget(), Qt.QWidget)
+        self.top_layout.addWidget(self._qtgui_time_sink_x_0_win)
+        self.qtgui_const_sink_x_0_0_0 = qtgui.const_sink_c(
+            1024, #size
+            "constellation before frame equalizer", #name
+            1, #number of inputs
+            None # parent
+        )
+        self.qtgui_const_sink_x_0_0_0.set_update_time(0.8)
+        self.qtgui_const_sink_x_0_0_0.set_y_axis((-0.5), 0.5)
+        self.qtgui_const_sink_x_0_0_0.set_x_axis((-0.2), 0.2)
+        self.qtgui_const_sink_x_0_0_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, "")
+        self.qtgui_const_sink_x_0_0_0.enable_autoscale(False)
+        self.qtgui_const_sink_x_0_0_0.enable_grid(True)
+        self.qtgui_const_sink_x_0_0_0.enable_axis_labels(True)
+
+
+        labels = ['', '', '', '', '',
+            '', '', '', '', '']
+        widths = [1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1]
+        colors = ["blue", "red", "red", "red", "red",
+            "red", "red", "red", "red", "red"]
+        styles = [0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0]
+        markers = [0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0]
+        alphas = [1.0, 1.0, 1.0, 1.0, 1.0,
+            1.0, 1.0, 1.0, 1.0, 1.0]
+
+        for i in range(1):
+            if len(labels[i]) == 0:
+                self.qtgui_const_sink_x_0_0_0.set_line_label(i, "Data {0}".format(i))
+            else:
+                self.qtgui_const_sink_x_0_0_0.set_line_label(i, labels[i])
+            self.qtgui_const_sink_x_0_0_0.set_line_width(i, widths[i])
+            self.qtgui_const_sink_x_0_0_0.set_line_color(i, colors[i])
+            self.qtgui_const_sink_x_0_0_0.set_line_style(i, styles[i])
+            self.qtgui_const_sink_x_0_0_0.set_line_marker(i, markers[i])
+            self.qtgui_const_sink_x_0_0_0.set_line_alpha(i, alphas[i])
+
+        self._qtgui_const_sink_x_0_0_0_win = sip.wrapinstance(self.qtgui_const_sink_x_0_0_0.qwidget(), Qt.QWidget)
+        self.top_layout.addWidget(self._qtgui_const_sink_x_0_0_0_win)
         self.qtgui_const_sink_x_0_0 = qtgui.const_sink_c(
             1024, #size
             "constellation after frame equalizer", #name
             1, #number of inputs
             None # parent
         )
-        self.qtgui_const_sink_x_0_0.set_update_time(1)
+        self.qtgui_const_sink_x_0_0.set_update_time(0.8)
         self.qtgui_const_sink_x_0_0.set_y_axis((-1.5), 1.5)
         self.qtgui_const_sink_x_0_0.set_x_axis((-1.5), 1.5)
         self.qtgui_const_sink_x_0_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, "")
@@ -129,10 +218,20 @@ class Project808a(gr.top_block, Qt.QWidget):
         self._qtgui_const_sink_x_0_0_win = sip.wrapinstance(self.qtgui_const_sink_x_0_0.qwidget(), Qt.QWidget)
         self.top_layout.addWidget(self._qtgui_const_sink_x_0_0_win)
         self.pdu_pdu_to_tagged_stream_0 = pdu.pdu_to_tagged_stream(gr.types.complex_t, 'packet_len')
+        self.iio_pluto_source_0 = iio.fmcomms2_source_fc32('' if '' else iio.get_pluto_uri(), [True, True], 32768)
+        self.iio_pluto_source_0.set_len_tag_key('packet_len')
+        self.iio_pluto_source_0.set_frequency(2412000000)
+        self.iio_pluto_source_0.set_samplerate(samp_rate)
+        self.iio_pluto_source_0.set_gain_mode(0, 'slow_attack')
+        self.iio_pluto_source_0.set_gain(0, 64)
+        self.iio_pluto_source_0.set_quadrature(True)
+        self.iio_pluto_source_0.set_rfdc(True)
+        self.iio_pluto_source_0.set_bbdc(True)
+        self.iio_pluto_source_0.set_filter_params('Auto', '', 0, 0)
         self.ieee802_11_sync_short_0 = ieee802_11.sync_short(0.8, 2, False, False)
         self.ieee802_11_sync_long_0 = ieee802_11.sync_long(240, False, False)
         self.ieee802_11_parse_mac_0 = ieee802_11.parse_mac(False, False)
-        self.ieee802_11_frame_equalizer_0 = ieee802_11.frame_equalizer(ieee802_11.LS, 5800000000, 20000000, False, False)
+        self.ieee802_11_frame_equalizer_0 = ieee802_11.frame_equalizer(ieee802_11.LS, 2412000000, 20000000, False, False)
         self.ieee802_11_decode_mac_0 = ieee802_11.decode_mac(False, False)
         self.foo_wireshark_connector_0 = foo.wireshark_connector(127, False)
         self.fir_filter_xxx_1 = filter.fir_filter_ccc(1, [1]*window_size)
@@ -140,11 +239,10 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.fir_filter_xxx_0 = filter.fir_filter_fff(1, [1]*window_size)
         self.fir_filter_xxx_0.declare_sample_delay(0)
         self.fft_vxx_0 = fft.fft_vcc(64, True, window.rectangular(64), True, 1)
+        self.blocks_vector_to_stream_0 = blocks.vector_to_stream(gr.sizeof_gr_complex*1, 64)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 64)
         self.blocks_multiply_xx_0 = blocks.multiply_vcc(1)
-        self.blocks_file_source_0 = blocks.file_source(gr.sizeof_gr_complex*1, '/home/lucasa/Área de Trabalho/CDIG/Wifi_Project_Baseband_recordings/Sample3_20MHz_Channel100.bin', True, 0, 0)
-        self.blocks_file_source_0.set_begin_tag(pmt.PMT_NIL)
-        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, '/home/lucasa/Área de Trabalho/CDIG/test.pcap', False)
+        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, '/home/lucasa/Área de Trabalho/CDIG/Github_with_miguel/CDIG-SDR-Project/Code/test.pcap', False)
         self.blocks_file_sink_0.set_unbuffered(True)
         self.blocks_divide_xx_0 = blocks.divide_ff(1)
         self.blocks_delay_1 = blocks.delay(gr.sizeof_gr_complex*1, 240)
@@ -167,11 +265,11 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.connect((self.blocks_delay_0, 0), (self.ieee802_11_sync_short_0, 0))
         self.connect((self.blocks_delay_1, 0), (self.ieee802_11_sync_long_0, 1))
         self.connect((self.blocks_divide_xx_0, 0), (self.ieee802_11_sync_short_0, 2))
-        self.connect((self.blocks_file_source_0, 0), (self.blocks_complex_to_mag_squared_0, 0))
-        self.connect((self.blocks_file_source_0, 0), (self.blocks_delay_0, 0))
-        self.connect((self.blocks_file_source_0, 0), (self.blocks_multiply_xx_0, 1))
+        self.connect((self.blocks_divide_xx_0, 0), (self.qtgui_time_sink_x_0, 0))
         self.connect((self.blocks_multiply_xx_0, 0), (self.fir_filter_xxx_1, 0))
         self.connect((self.blocks_stream_to_vector_0, 0), (self.fft_vxx_0, 0))
+        self.connect((self.blocks_vector_to_stream_0, 0), (self.qtgui_const_sink_x_0_0_0, 0))
+        self.connect((self.fft_vxx_0, 0), (self.blocks_vector_to_stream_0, 0))
         self.connect((self.fft_vxx_0, 0), (self.ieee802_11_frame_equalizer_0, 0))
         self.connect((self.fir_filter_xxx_0, 0), (self.blocks_divide_xx_0, 1))
         self.connect((self.fir_filter_xxx_1, 0), (self.blocks_complex_to_mag_0, 0))
@@ -181,6 +279,9 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.connect((self.ieee802_11_sync_long_0, 0), (self.blocks_stream_to_vector_0, 0))
         self.connect((self.ieee802_11_sync_short_0, 0), (self.blocks_delay_1, 0))
         self.connect((self.ieee802_11_sync_short_0, 0), (self.ieee802_11_sync_long_0, 0))
+        self.connect((self.iio_pluto_source_0, 0), (self.blocks_complex_to_mag_squared_0, 0))
+        self.connect((self.iio_pluto_source_0, 0), (self.blocks_delay_0, 0))
+        self.connect((self.iio_pluto_source_0, 0), (self.blocks_multiply_xx_0, 1))
         self.connect((self.pdu_pdu_to_tagged_stream_0, 0), (self.qtgui_const_sink_x_0_0, 0))
 
 
@@ -205,6 +306,7 @@ class Project808a(gr.top_block, Qt.QWidget):
 
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
+        self.iio_pluto_source_0.set_samplerate(self.samp_rate)
 
 
 
