@@ -37,6 +37,8 @@ from gnuradio.eng_arg import eng_float, intx
 from gnuradio import eng_notation
 from gnuradio import gr, pdu
 from gnuradio import iio
+from gnuradio.qtgui import Range, RangeWidget
+from PyQt5 import QtCore
 import foo
 import ieee802_11
 
@@ -82,13 +84,17 @@ class Project808a(gr.top_block, Qt.QWidget):
         ##################################################
         self.window_size = window_size = 64
         self.samp_rate = samp_rate = 20000000
+        self.LO_Frequency = LO_Frequency = 2400000000
 
         ##################################################
         # Blocks
         ##################################################
 
+        self._LO_Frequency_range = Range(2400000000, 5900000000, 20000000, 2400000000, 200)
+        self._LO_Frequency_win = RangeWidget(self._LO_Frequency_range, self.set_LO_Frequency, "LO_Frequency", "counter_slider", int, QtCore.Qt.Horizontal)
+        self.top_layout.addWidget(self._LO_Frequency_win)
         self.qtgui_time_sink_x_0 = qtgui.time_sink_f(
-            1024, #size
+            512, #size
             1, #samp_rate
             "autocorrelation normalized", #name
             1, #number of inputs
@@ -220,7 +226,7 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.pdu_pdu_to_tagged_stream_0 = pdu.pdu_to_tagged_stream(gr.types.complex_t, 'packet_len')
         self.iio_pluto_source_0 = iio.fmcomms2_source_fc32('' if '' else iio.get_pluto_uri(), [True, True], 32768)
         self.iio_pluto_source_0.set_len_tag_key('packet_len')
-        self.iio_pluto_source_0.set_frequency(2412000000)
+        self.iio_pluto_source_0.set_frequency(LO_Frequency)
         self.iio_pluto_source_0.set_samplerate(samp_rate)
         self.iio_pluto_source_0.set_gain_mode(0, 'slow_attack')
         self.iio_pluto_source_0.set_gain(0, 64)
@@ -231,7 +237,7 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.ieee802_11_sync_short_0 = ieee802_11.sync_short(0.8, 2, False, False)
         self.ieee802_11_sync_long_0 = ieee802_11.sync_long(240, False, False)
         self.ieee802_11_parse_mac_0 = ieee802_11.parse_mac(False, False)
-        self.ieee802_11_frame_equalizer_0 = ieee802_11.frame_equalizer(ieee802_11.LS, 2412000000, 20000000, False, False)
+        self.ieee802_11_frame_equalizer_0 = ieee802_11.frame_equalizer(ieee802_11.LS, LO_Frequency, 20000000, False, False)
         self.ieee802_11_decode_mac_0 = ieee802_11.decode_mac(False, False)
         self.foo_wireshark_connector_0 = foo.wireshark_connector(127, False)
         self.fir_filter_xxx_1 = filter.fir_filter_ccc(1, [1]*window_size)
@@ -242,7 +248,7 @@ class Project808a(gr.top_block, Qt.QWidget):
         self.blocks_vector_to_stream_0 = blocks.vector_to_stream(gr.sizeof_gr_complex*1, 64)
         self.blocks_stream_to_vector_0 = blocks.stream_to_vector(gr.sizeof_gr_complex*1, 64)
         self.blocks_multiply_xx_0 = blocks.multiply_vcc(1)
-        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, '/home/lucasa/Área de Trabalho/CDIG/Github_with_miguel/CDIG-SDR-Project/Code/test.pcap', False)
+        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, '/home/miguel/Documents/ELETRO/4ANO 1S/CDIG/CDIG-SDR-Project/Code/test.pcap', False)
         self.blocks_file_sink_0.set_unbuffered(True)
         self.blocks_divide_xx_0 = blocks.divide_ff(1)
         self.blocks_delay_1 = blocks.delay(gr.sizeof_gr_complex*1, 240)
@@ -307,6 +313,14 @@ class Project808a(gr.top_block, Qt.QWidget):
     def set_samp_rate(self, samp_rate):
         self.samp_rate = samp_rate
         self.iio_pluto_source_0.set_samplerate(self.samp_rate)
+
+    def get_LO_Frequency(self):
+        return self.LO_Frequency
+
+    def set_LO_Frequency(self, LO_Frequency):
+        self.LO_Frequency = LO_Frequency
+        self.ieee802_11_frame_equalizer_0.set_frequency(self.LO_Frequency)
+        self.iio_pluto_source_0.set_frequency(self.LO_Frequency)
 
 
 
