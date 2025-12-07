@@ -1,27 +1,97 @@
 # Week 1 - 20/10/25
 
-This week's work focused on researching the fundamental parameters of the IEEE 802.11a OFDM system and analyzing the initial frame detection stage of the GNU Radio receiver presented in the paper.
+This week marked the beginning of the project, focusing on the theoretical foundations of the IEEE 802.11a physical layer and the initial frame detection stage of the GNU Radio receiver. We studied the **OFDM system design parameters** required to configure the receiver and analyzed the receiver's software architecture, specifically the frame detection logic presented in the paper.
 
 ---
 
-## IEEE 802.11a
+## 1. 802.11a OFDM System Parameters
 
-IEEE 802.11a operates within a 20 MHz bandwidth and employs a 64-point IFFT/FFT, which establishes a total of 64 subcarriers. The spacing between these subcarriers is 0.3125 MHz (or 312.5 kHz). Of the 64 subcarriers, 52 are actively used: 48 are designated as data subcarriers for information transmission, and 4 are pilot subcarriers used for phase and frequency tracking. The remaining 12 subcarriers are unused; these include the central DC subcarrier (index 0), which is nulled to avoid issues with DC offsets in transceivers, and 11 subcarriers at the band edges (indices ±27 to ±31), which act as guard bands to reduce interference with adjacent channels.
+To implement the receiver, we first defined the fundamental parameters of the 802.11a PHY. These values dictate how the GNU Radio flowgraph samples and processes the incoming signal.
 
-The system's sampling rate is 20 MHz. The useful duration of one OFDM symbol (the IFFT/FFT period) is 3.2 µs, which corresponds to 64 samples. To combat multipath interference, a cyclic prefix (CP) with a duration of 0.8 µs (or 16 samples) is added to the beginning of each symbol. This brings the total OFDM symbol duration to 4.0 µs (64 samples + 16 CP samples = 80 total samples).
+### Frequency Domain Parameters
+* **Channel Bandwidth:** 20 MHz.
+* **FFT Size ($N_{FFT}$):** 64 points.
+* **Sub-carrier Spacing ($\Delta f$):** 312.5 kHz.
+    * *Calculation:* $\frac{Bandwidth}{N_{FFT}} = \frac{20 \text{ MHz}}{64} = 312.5 \text{ kHz}$.
+* **Number of Active Sub-carriers:** 52.
+    * **Data Sub-carriers ($N_{SD}$):** 48 sub-carriers used for the payload (BPSK, QPSK, 16-QAM, or 64-QAM).
+    * **Pilot Sub-carriers ($N_{SP}$):** 4 sub-carriers used for phase tracking, located at indices $\pm 7$ and $\pm 21$.
 
-Each 802.11a frame begins with a physical layer preamble, or prefix, which is 16 µs long in total. This prefix is divided into two parts: a Short Training Field (STF) and a Long Training Field (LTF). The STF consists of 10 repetitions of a short training symbol, each 0.8 µs long, for a total STF duration of 8 µs; it's used for signal detection, gain control, and coarse frequency offset estimation. The LTF follows, also lasting 8 µs, and consists of a 1.6 µs guard interval followed by two 3.2 µs long training symbols. The LTF is used for fine-tuning frequency offset and for channel estimation.
+****
 
-## Section 2.1
+### Time Domain Parameters
+The SDR operates in the digital domain using discrete samples. We derived the sample-based timings assuming a **20 MHz sampling rate**.
+* **Sampling Rate:** 20 MHz (1 sample every 50 ns).
+* **Inverse FFT Period ($T_{FFT}$):** $3.2 \mu s$ (64 samples).
+* **Guard Interval Duration ($T_{GI}$):** $0.8 \mu s$ (16 samples).
+* **Total OFDM Symbol Duration:** $4.0 \mu s$ ($3.2 + 0.8$).
+* **Total Symbol Length (Samples):** 80 samples ($64 \text{ FFT} + 16 \text{ CP}$).
 
-The OFDM receiver's architecture is divided into two functional parts, the frame detection and frame decoding. The first part is responsible for detecting the start of a frame, while the second part handles the actual decoding process. The key to this rapid performance is the Vectorized Library of Kernels (VOLK), which uses Single Instruction Multiple Data (SIMD) instructions to speed up signal processing tasks. To coordinate the flowgraph, Stream Tagging is used to attach metadata to samples, allowing blocks to signal the start of an OFDM frame and later pass the frame's length and encoding scheme. Finally, Message Passing is also used as an alternative way to handle packet-based data, encapsulating arbitrary information, which can be utilized to complete packets and switch to stream-based processing.
 
-## Section 2.2
+## 2. Unused Sub-carriers and Spectral Mask
 
-The first stage of the OFDM receiver is responsible for Frame Detection, leveraging the known characteristics of the IEEE 802.11a/g/p short preamble, which features a pattern that spans 16 samples and repeats ten times. To detect this, an autocorrelation function with a 16-sample lag is implemented using two main branches, as seen in the block diagram. The top branch calculates the autocorrelation numerator: the incoming signal is split, with one path delayed by 16 samples and the other path complex conjugated before they are multiplied together. This result is then processed by a Decimating FIR Filter block, which, by having its Decimation parameter set to 1, is cleverly used as a moving window summer to perform the summation step of the autocorrelation. Simultaneously, the lower branch calculates the signal's average power, which is ultimately used to normalize the autocorrelation coefficient. This normalization makes the frame detection reliable and prevents false positives that could be caused by high signal power.
+We investigated why the 64-point FFT is not fully populated with data and where the "empty" carriers are located.
 
-At last, we explored the effect of our variable `window_size` ($N_{Win}$) parameter, which controls the length of the moving average filter for frame detection. We observed a clear trade-off: a small value like 16 resulted in noisy spikes, leaving an unstable plateau, a large value like 96 produced a very smooth but dispersed plateau of the signal, making the frame's start and end indistinct. As for the value of 48, it provided an optimal balance, helping to generate a clean and stable plateau.
+****
 
+* **Why are there unused sub-carriers?**
+    1.  **DC Carrier (Index 0):** This is set to zero to prevent **carrier leakage** (DC offset) from the Digital-to-Analog converter. If active, the local oscillator's own energy would corrupt the data at the center frequency.
+    2.  **Guard Bands:** These are "empty" carriers at the edges of the spectrum. They ensure the signal energy decays sufficiently before entering adjacent channels, satisfying the spectral mask requirements to prevent interference.
+* **Where are they located?**
+    * **DC Null:** Index 0.
+    * **Guard Sub-carriers:** Indices -32 to -27 (Lower edge) and +27 to +31 (Upper edge). Total of 11 guard sub-carriers + 1 DC = 12 Nulls.
+
+
+## 3. Cyclic Prefix (CP) Strategy
+
+We analyzed the Cyclic Prefix, a critical component of OFDM that solves the multipath propagation problem.
+
+****
+
+* **Length:** 16 samples ($0.8 \mu s$).
+* **Why is it used?**
+    1.  **Guard Interval:** It acts as a buffer. As long as the multipath delay spread is shorter than $0.8 \mu s$, the echoes from the previous symbol will settle within the CP window and will not interfere with the current symbol (eliminating Inter-Symbol Interference).
+    2.  **Circular Convolution:** By making the signal appear periodic to the FFT, it converts the channel's linear convolution into a circular convolution. This allows simple, single-tap frequency domain equalization.
+
+
+## 4. Frame Prefix Structure (Preamble)
+
+Each 802.11a frame begins with a physical layer preamble, which is $16 \mu s$ long in total.
+
+****
+
+* **Short Training Sequence (STS):**
+    * **Composition:** 10 identical short OFDM symbols.
+    * **Length:** 16 samples each $\times$ 10 repetitions = **160 samples** total ($8 \mu s$).
+    * **Purpose:** Used for signal detection, Automatic Gain Control (AGC), and coarse frequency offset estimation.
+* **Long Training Sequence (LTS):**
+    * **Composition:** A Guard Interval (32 samples, $1.6 \mu s$) followed by 2 identical long OFDM symbols (64 samples, $3.2 \mu s$ each).
+    * **Length:** $32 + 64 + 64$ = **160 samples** total ($8 \mu s$).
+    * **Purpose:** Used for channel estimation and fine frequency offset tuning.
+
+---
+
+## 5. Receiver Architecture (Section 2.1)
+
+We analyzed the software architecture proposed in the paper. The receiver is divided into two main functional parts: **frame detection** and **frame decoding**.
+* **Flowgraph Coordination:**
+    * **Stream Tagging:** Used to attach metadata to specific samples (e.g., marking the start of a frame or passing the frame's length/encoding scheme).
+    * **Message Passing:** Utilized for packet-based data handling, allowing the encapsulation of arbitrary information to switch between stream-based processing and packet processing.
+
+---
+
+## 6. Frame Detection Implementation (Section 2.2)
+
+The first stage of the receiver is Frame Detection, which leverages the periodic nature of the short preamble (16-sample pattern repeating 10 times). We implemented an autocorrelation function with a 16-sample lag using two parallel branches:
+
+* **Autocorrelation Branch (Top):** Calculates the numerator. The incoming signal is split; one path is delayed by 16 samples, and the other is complex conjugated. They are multiplied together, and the result is summed using a **Decimating FIR Filter** (with Decimation=1), effectively acting as a moving window summer.
+* **Power Branch (Bottom):** Calculates the average power of the signal. This is used to normalize the autocorrelation coefficient, ensuring detection is based on signal similarity rather than raw amplitude.
+
+### Experiment: Window Size ($N_{Win}$)
+We explored the effect of varying the `window_size` parameter, which controls the length of the moving average filter.
+* **Small ($N=16$):** Resulted in noisy spikes and an unstable detection plateau.
+* **Large ($N=96$):** Produced a smooth but dispersed plateau, making the precise start of the frame indistinct.
+* **Optimal ($N=48$):** Provided the best balance, generating a clean and stable plateau for reliable detection.
 ---
 
 # Week 2 - 27/10/25
@@ -90,141 +160,114 @@ Instead of acting as a "valve" that copies large, blind chunks, the new Sync Sho
 
 ---
 
-# Week 3
+# Week 3 - 06/10/25
 
-For Week 3, we continued our theoretical analysis, focusing entirely on the **OFDM Sync Long** block and its two critical functions. This followed our work from last week, as we are still blocked on the practical implementation due to the module download issue. The main objective was to deeply understand the algorithms for **Frequency Offset Correction (Section 2.3)** and **Symbol Alignment (Section 2.4)**. We analyzed the implementation of the frequency offset algorithm, identified its core 16-sample delay as a non-tunable constant, and distinguished it from the external Delay(240) block, which we identified as a system-level pipeline buffer. We also identified the tunable parameters for this algorithm and investigated the modern "tagging" implementation from the repository, which solves the limitations of the 2013 paper's design.
-
----
-
-## Analysis of the OFDM Sync Long Block
-
-### 1. Block Function and Objective
-The OFDM Sync Long block is the second and final stage of synchronization. It is a stateful, multi-mode block that receives a chunk of samples from the Sync Short block (via the Delay(240) block) after a frame has been detected.
-
-This block has two distinct and sequential responsibilities:
-
-1.  **Frequency Offset Correction (Section 2.3):** First, it re-uses the short preamble sequence (which is at the start of the chunk) to perform a high-precision calculation of the frequency offset between the transmitter and receiver.
-2.  **Symbol Alignment (Section 2.4):** Second, it uses the long preamble sequence (which follows the short) to find the exact starting sample of the first data symbol (the Signal Field).
-
-After performing these two tasks, the block transitions to its "data" state: it strips the preambles, removes the 16-sample cyclic prefix from all subsequent 80-sample symbols, and streams the resulting 64-sample data chunks to the FFT.
-
-### 2. Algorithm 1: Frequency Offset Correction
-This section addresses the algorithm from Section 2.3 of the paper, which is the first task performed inside the Sync Long block.
-
-**Where is it implemented?**
-The algorithm is implemented inside the **OFDM Sync Long** block. It operates on the first part of the sample chunk (the 160-sample short preamble) that it receives from its data input.
-
-**The Algorithm's 16-Sample "Delayed Input"**
-The core of the algorithm is a complex autocorrelation with a 16-sample delay, as shown in Equation 4:
-
-$$df = \frac{1}{16} \arg\left(\sum s[n] \cdot \text{conj}(s[n+16])\right)$$
-
-This 16-sample delay is not a tunable parameter; it is a fundamental constant mandated by the IEEE 802.11 standard.
-
-* **Why 16?** The short preamble is defined as a 16-sample pattern that repeats 10 times. In an ideal system, sample $s[n]$ would be identical to sample $s[n+16]$.
-* **The Math:** A frequency offset ($\Delta f$) between the transmitter and receiver causes a constant, accumulating phase rotation ($\theta$) with every sample. The total phase rotation after 16 samples is exactly $16\theta$.
-* **How it Works:** By multiplying a sample $s[n]$ by the complex conjugate of $s[n+16]$, the algorithm isolates this $16\theta$ phase difference. (The unknown underlying signal $s[n]$ is canceled out, leaving only a phase rotation and the signal's power).
-* **The Result:** By summing (averaging) this calculation over the preamble, the block gets a single, stable complex number whose phase angle is $16\theta$. The algorithm takes the `arg()` of this number to get the phase, and then divides by 16 to get the exact per-sample phase offset ($df$).
-
-*What would be the impact of changing that 16-sample value?*
-
-You cannot change this value. If you changed the delay to 15 or 17, the algorithm would be comparing two samples that have no correlation ($s[n]$ and $s[n+17]$). The result of the `sum()` would be random noise, the calculated $df$ would be meaningless, and all subsequent decoding (FFT, etc.) would fail.
-
-### 3. The External Delayed Input: The Delay(240) Block
-
-The most confusing part of the diagram (Figure 1) is the external Delay(240) block. This delay is **not** related to the 16-sample delay in the frequency correction algorithm.
-
-This is a **software pipeline buffer** designed to manage the "lookahead" time in the GNU Radio scheduler.
-
-Here is the flow:
-* **Fast Path (Detection):** The raw signal goes directly into the Frame Detection logic. The Sync Short block finds a plateau early (e.g., at sample 50) and sends a trigger message to the Sync Long block.
-* **Slow Path (Processing):** The raw signal also goes into the Delay(240) block.
-* **The "Lookahead":** When the Sync Short sends its trigger at Time 50, the Sync Long block's data input (the slow path) is still seeing sample $50 - 240 = -190$ (i.e., noise from the past).
-* **Purpose:** This gives the GNU Radio scheduler 190 samples of "warning time" to stop the Sync Long block (which was just processing noise) and schedule it to process the incoming frame before that frame's data arrives. 240 samples (equal to 3 OFDM symbols) is a safe, robust buffer size to ensure this software-based scheduling happens without losing samples.
-
-**What would be the impact of changing that 240-sample value?**
-
-* **Making it Smaller (e.g., 160):** This would reduce the pipeline latency, but it also reduces the "warning time" for the scheduler. If the Sync Short triggers at sample 50, the scheduler would only have $160 - 50 = 110$ samples to react. This is "tighter" and risks missing the start of the frame if the system has any scheduling lag.
-* **Making it Larger (e.g., 500):** This would be even safer, giving the scheduler more time. However, it would add unnecessary latency to the entire pipeline.
-
-**Conclusion:** The 240-sample delay is a system-level tuning parameter for pipeline stability, balancing latency against the risk of data loss due to software scheduling delays.
-
-### 4. Other Configurable Parameters
-
-The main tunable parameter for the frequency offset algorithm is the averaging window ($N_{short}$ in Equation 4). The paper uses the length of the short preamble. For faster processing, a smaller window could be used, however, at the cost of susceptibility to noise, leading to a less precise frequency offset correction.
-
-### 5. The Modern Repository Implementation (The "Fix")
-
-The complex "fast path / slow path / delay" architecture described in the 2013 paper is the original implementation. The author's gr-ieee802-11 repository now uses a much cleaner, more modern approach.
-
-This new design removes the Delay(240) block and the "fixed chunk" logic entirely.
-
-The Sync Short block no longer acts as a "valve." Instead, it acts as a **"tagger."**
-
-1.  It continuously monitors the stream and, upon detection, adds a **stream tag** (e.g., `frame_start`) to the exact sample in the original, undelayed stream where the preamble began.
-2.  The Sync Long block simply receives this continuous, tagged stream. When it sees a `frame_start` tag, it knows to start its internal process (frequency correction, then symbol alignment) at that exact sample.
-
-This updated "tagging" architecture is far superior, as it solves the "back-to-back" frame (RTS/CTS) problem and greatly simplifies the flowgraph logic.
+For Week 3, we focused on the internal architecture of the **OFDM Sync Long** block, corresponding to **Section 2.3** of the receiver guide. Unlike the "Sync Short" block, which runs continuously to detect frames, the "Sync Long" block is a triggered state machine . We analyzed its input structure (the Delay Buffer) and the first of its two signal processing tasks: **Fine Frequency Offset Correction**.
 
 ---
 
-# Week 4
+## Analysis of the OFDM Sync Long Block (Section 2.3)
 
-This week, we analyzed the high-precision symbol alignment process from Section 2.4. The study focused on how the OFDM Sync Long block uses a matched filter on the Long Training Sequence (LTS) to find the exact starting sample of the Signal Field. We investigated the core design trade-off between this precise, computationally expensive matched filter and the "good enough," cheaper autocorrelation used for initial frame detection. The analysis also covered the specific implementation details, such as adding 64 to the final peak index to find the data start, and the function of the Stream to Vector block in preparing the aligned sample stream for the FFT.
+We dissected the block's operation into two main components: handling the processing latency via a split-path architecture and performing fine-grained frequency correction using the Long Training Sequence (LTS).
+
+### 1. The Split-Path Architecture and Delay Buffer
+We investigated the question: *"Why is there a delayed input?"* . The receiver employs a split-path design to handle the time gap between "detecting" a frame and "processing" it.
+
+****
+
+* **Input 0 (Control/Tag Path):** Receives the direct stream from the Sync Short block. This stream carries the `wifi_start` stream tag, which acts as the trigger to wake up the Sync Long state machine .
+* **Input 1 (Data/Buffered Path):** Receives the signal passed through a **Delay Block** (set to 240 samples) .
+* **Why is the delay necessary?**
+    * The detection logic in the previous block (Sync Short) requires a finite window of time to calculate the autocorrelation plateau and confirm a frame is present .
+    * By the instant the "Frame Detected" decision is made, the actual start of the frame (the preamble) has already flowed past the block .
+    * The 240-sample delay acts as a **pre-roll buffer**, holding the "past" samples in memory. When the Sync Long block is triggered, it reads from this delayed input, effectively "reaching back in time" to capture the frame from the very first sample of the Short Training Sequence, ensuring zero data loss .
+
+* **Impact of Changing the Delay Value ($N=240$):**
+    * **Making it Shorter (e.g., < 160):** If the delay is reduced too much, it may become shorter than the processing latency of the detection block. The `Sync Long` block would "wake up" too late, reading a stream where the start of the preamble has already passed. This would cause the receiver to miss the Long Training Sequence entirely, resulting in synchronization failure and data loss.
+    * **Making it Larger (e.g., > 300):** Increasing the delay adds unnecessary latency to the entire receive pipeline. While it provides a larger safety margin for the software scheduler, it delays the arrival of the decoded packet at the MAC layer.
+
+### 2. Fine Frequency Offset Correction
+Once the frame data is retrieved from the buffer, the block performs Fine Frequency Correction. We distinguished this from the "Coarse" correction done in Week 2 .
+
+* **The Signal (LTS):** This step uses the Long Training Sequence, which consists of a Guard Interval followed by two identical OFDM symbols ($T_1$ and $T_2$), each **64 samples** long .
+* **The Mathematical Principle:**
+    * A Carrier Frequency Offset (CFO) causes the constellation to spin, manifesting as a phase rotation over time .
+    * Since $T_1$ and $T_2$ are identical, any phase difference between them is solely due to the frequency offset accumulated over the duration of one symbol (64 samples) .
+* **The Algorithm:**
+    The block estimates the fine offset ($\Delta f_{fine}$) by calculating the phase angle between the two symbols:
+    $$\Delta f_{fine} = \frac{1}{64} \arg\left( \sum_{k=0}^{63} r[n+k] \cdot r^*[n+k+64] \right)$$
+    * $r[n+k]$ is the sample from the first symbol ($T_1$).
+    * $r^*[n+k+64]$ is the conjugate of the sample from the second symbol ($T_2$).
+    * The `arg` function extracts the total phase rotation.
+    * Dividing by 64 normalizes this to the phase shift *per sample* .
+
+* **Code Implementation:**
+    We identified the specific C++ implementation in `sync_long.cc` that implements this logic:
+    ```cpp
+    // sync_long.cc: search_frame_start()
+    // Calculate the angle of the product of the two 64-sample symbols
+    d_freq_offset = arg(first * conj(second)) / 64;
+    ```
+    
+
+* **Application:**
+    This value is added to the coarse frequency offset. During the "COPY" state, the block applies a counter-rotation to every single sample in the payload to nullify the drift:
+    ```cpp
+    // sync_long.cc: general_work()
+    out[o] = in_delayed[i] * exp(gr_complex(0, d_offset - d_freq_offset));
+    ```
+    
 
 ---
 
-## Analysis of Symbol Alignment (Section 2.4)
+# Week 4 - 13/10/25
 
-This section details the second, high-precision phase of synchronization performed by the OFDM Sync Long block, which occurs immediately after the frequency offset has been corrected.
+This week, we completed the synchronization subsystem by analyzing **Symbol Alignment (Section 2.4)**. The goal was to understand how the receiver identifies the precise start of the payload (to avoid ISI) and how it formats the data for the FFT.
 
-### 1. Symbol Alignment Algorithm Logic
+---
 
-The algorithm's goal is to find the exact sample index that marks the end of the preamble and the start of the first data-carrying symbol (the Signal Field). It achieves this by using the Long Training Sequence (LTS), which is 160 samples long (a 32-sample guard interval followed by two 64-sample training symbols).
+## Symbol Alignment and FFT Preparation (Section 2.4)
 
-The logic follows these steps:
-* **Matched Filtering:** The algorithm performs a matched filter operation. It slides a known, 64-sample "template" of the long preamble pattern ($LT[k]$) across the received, frequency-corrected signal ($s[n+k]$).
-* **Correlation Score:** At every sample position n, it calculates a correlation score, which is the sum of the products of the template and the signal (this is the `sum(...)` part of Equation 6).
-* **Peak Detection:** When the template perfectly aligns with the real LTS in the signal, this score "pings" with a very high, narrow peak (as shown in Figure 3). The LTS repeats twice, so this creates two distinct peaks.
-* **Robustness (The $\arg \max_3$):** To protect against random noise creating a single false peak, the algorithm doesn't just find the single highest peak. It finds the indices of the three highest peaks in the search area.
-* **Final Peak Selection ($\max(N_p)$):** From this list of 3 candidates, the algorithm selects the one with the latest time index (the `max()` function). This ensures it synchronizes to the second and final repetition of the long training symbol, which is the most stable and most recent timing reference. This value ($\max(N_p)$) is the sample index for the start of the final 64-sample training symbol.
+After frequency correction, the signal is clean, but the receiver still does not know exactly where the symbols start. Being off by even a few samples would result in the FFT window capturing the Cyclic Prefix of the next symbol, causing Inter-Symbol Interference (ISI) and phase rotations .
 
-*Why do you add 64 in Equation 7?*
+### 1. Symbol Timing Alignment (Matched Filtering)
+To solve the alignment problem, the Sync Long block uses a Matched Filter .
 
-Equation 7 is: $$n_p = \max(N_p) + 64$$
+****
 
-The value $\max(N_p)$ gives the algorithm the start of the final 64-sample training symbol. However, the data does not begin until this final training symbol is finished.
+* **The Algorithm:**
+    The block convolves the received signal with a known time-domain template of the Long Training Sequence (LTS).
+    ```cpp
+    // sync_long.cc
+    d_fir.filter(d_correlation, in, ...);
+    ```
+    
+* **Matched Filtering vs. Autocorrelation:**
+    * *Why matched filtering used for symbol alignment but not for frame detection?* 
+    * Matched filtering is computationally expensive ($\approx 64$ multiplications per sample) .
+    * However, since the Sync Long block only runs this check on the preamble (a small subset of the stream), we can afford the "cost" to gain the **high precision** required for symbol alignment, whereas the Sync Short block needs a cheaper algorithm (autocorrelation) to scan the continuous stream .
 
-The + 64 is added because the long training symbol has a length of 64 samples. By adding 64 to the start index, the algorithm calculates the exact sample index ($n_p$) for the end of the preamble, which is the precise start of the Signal Field.
+### 2. Peak Detection and the +64 Offset
+The matched filter produces peaks when the template aligns with the received LTS. We analyzed the specific mathematical logic used to define the "Frame Start" index.
 
-### 2. Matched Filtering vs. Autocorrelation
+* **Peak Selection:** The algorithm identifies the peaks corresponding to the repeated LTS symbols. It selects the latest valid peak ($\max(N_p)$) to align with the second LTS symbol, as it provides the most stable reference .
+* **The Calculation:**
+    $$ n_{start} = \max(N_p) + 64 $$
+    
+* **Why do you add 64?** 
+    1.  The matched filter peak occurs at the **end** of the matched sequence pattern.
+    2.  Therefore, $\max(N_p)$ points to the sample where the **second LTS symbol finishes** .
+    3.  However, the standard defines the LTS as two 64-sample symbols. The data payload (Signal Field) begins immediately after the LTS. By adding 64 samples (the duration of the second LTS symbol) to the peak index, the algorithm calculates the exact sample index where the preamble ends and the Signal Field begins .
 
-This is a key design choice based on a trade-off between processing cost and required precision.
+### 3. Data Preparation for the FFT
+Once aligned, the block transitions to the "COPY" state and acts as a gatekeeper for the FFT.
 
-*Why Not Matched Filtering for Frame Detection (Sync Short)?*
 
-* **Job:** The Sync Short block must run continuously on the full 20 Msps (20 million samples/second) stream from the SDR.
-* **Cost:**
-    * The Autocorrelation ($s[n] \times \text{conj}(s[n+16])$) is computationally cheap. It requires only one complex multiplication per sample.
-    * A Matched Filter is computationally expensive. A 64-sample matched filter requires 64 complex multiplications per sample.
-* **Conclusion:** It is computationally infeasible to run an expensive matched filter on the full-speed, continuous stream. The 1-tap autocorrelation is "good enough" for the coarse job of just detecting that a frame has arrived.
-
-*Why Matched Filtering for Symbol Alignment (Sync Long)?*
-
-* **Job:** The Sync Long block runs only after a frame is detected. It processes only a small, fixed-size chunk of data, not the continuous stream.
-* **Precision:** This task requires exact precision. Being off by even one sample would ruin the FFT.
-* **Conclusion:** Because the block is "offline" (i.e., not running all the time) and only processing a small subset of data, the high computational cost is acceptable. The system "spends" its processing budget here to gain the high precision that only a matched filter can provide.
-
-The paper states this directly in a footnote (Section 2.2) and in Section 2.4:
-> "As this block needs only act on a subset of the incoming sample stream, and as the alignment has to be very precise, we employ matched filtering for this operation."
-
-### 3. The "Stream to Vector" Block
-
-This block is a standard GNU Radio utility that acts as a grouper or buffer.
-
-* **Input:** The Sync Long block (once aligned) outputs a continuous stream of individual samples (the 64-sample data chunks, one after another, with no prefixes).
-* **Output:** The FFT block, however, cannot operate on one sample at a time. Its FFT Size: 64 configuration means it must receive data in vectors of 64 samples.
-* **Function:** The Stream to Vector block (with Num Items: 64) sits in the middle. It collects samples from its input stream one by one until it has 64. It then bundles these 64 samples into a single "vector" and sends this vector as one item to the FFT block. It then repeats this process for the next 64 samples, and so on.
+* **Preamble Stripping:** The block discards the first 320 samples (160 Short + 160 Long Preamble) as they have served their purpose .
+* **Cyclic Prefix Removal:** For the rest of the frame, the incoming stream consists of 80-sample chunks (64 Data + 16 CP). The block strips the first 16 samples (Guard Interval) from every symbol to eliminate ISI .
+* **Stream to Vector:**
+    * *What does the stream to vector block do?* 
+    * The output is a continuous stream of 64-sample "core" symbols. However, the FFT block requires inputs as discrete vectors. The **Stream to Vector** block collects these 64 serial samples and bundles them into a single `std::vector` of length 64, satisfying the input requirement of the FFT block .
 
 ---
 
@@ -468,49 +511,66 @@ This block is the bridge between the physical layer and the MAC layer. It employ
 
 # Week 7 - 03/11/25
 
-This week, the focus shifted from equalization and frequency correction to the final stage of payload decoding. We analyzed the **OFDM Decode MAC** module (Section 2.8 of the article), which encapsulates several critical digital processing steps required to convert the complex symbols into useful data bits. We specifically examined the logic behind Demodulation, De-interleaving, and Descrambling.
+This week, we compressed the final stages of the project into a single intensive session. We moved from signal equalization to the final "digital" layers of the receiver: the **OFDM Decode MAC** module (Section 2.8) and the frame parsing logic. The goal was to understand how to recover the original user bits from the complex symbols and verify the receiver's operation against real-world IEEE 802.11 signals.
 
 ---
 
 ## Analysis of the OFDM Decode MAC Block
 
-Unlike the previous blocks that processed signals in the time or frequency domains, this module performs the final translation into the data layer. It operates as a sequence of abstract operations:
+This module acts as the bridge between the physical layer (complex I/Q samples) and the data link layer (bits/bytes). We analyzed its internal operations—Slicing, De-interleaving, and Descrambling—answering the specific questions posed in the guide.
 
-### 1. Digital Demodulation
-The block receives vectors of **48 constellation symbols** (complex numbers) at a time.
-* **Why 48?** The IEEE 802.11a standard uses a 64-point FFT. Of these 64 subcarriers, 12 are null (guard bands at edges ±27 to ±31 and the DC carrier at index 0) and 4 are pilots (indices -21, -7, 7, 21). This leaves exactly **48 subcarriers for data transmission**.
-* **Impact of Changing This:** This value is fundamental to the physical layer standard. Changing it would break compatibility, as the transmitter and receiver must agree on which subcarriers carry data versus pilots or nulls.
-* **Process:** The demodulation process converts these complex points (I/Q) into bits. While the paper discusses "soft-bits" (confidence values) to improve Viterbi decoding performance, the current C++ implementation (`decode_mac.cc`) processes the input symbols to extract the bits based on the modulation scheme (BPSK, QPSK, 16-QAM, or 64-QAM) configured by the Signal Field.
-    * **BPSK:** 1 bit per symbol.
-    * **QPSK:** 2 bits per symbol.
-    * **16-QAM:** 4 bits per symbol.
-    * **64-QAM:** 6 bits per symbol.
+### 1. Digital Demodulation (Symbol Slicing)
+The block processes the incoming OFDM symbols to extract raw bits.
+
+* **How many symbols are demodulated at once?** The system processes vectors of **48 constellation symbols**.
+* **Why 48?** The IEEE 802.11a standard uses a 64-point FFT. However, not all 64 "bins" carry data.
+    * **12 Null Subcarriers:** Used for guard bands at the edges ($\pm27$ to $\pm31$) and the DC carrier (index 0).
+    * **4 Pilot Subcarriers:** Indices $\pm7$ and $\pm21$, used for phase tracking.
+    * **Remaining:** Exactly **48 subcarriers** are left for the Data Field.
+* **Can you change this?** No. This value is hardcoded into the 802.11a physical layer specification. Changing it would break orthogonality with standard transmitters, as the receiver would try to interpret pilots or nulls as data, or miss actual data subcarriers.
+* **The Process:** The code implementation (Symbol Slicing) takes the complex symbol (represented as an integer index in the constellation) and extracts the bits using bitwise operations. This depends on the modulation determined by the Signal Field (e.g., extracting 1 bit for BPSK, 4 bits for 16-QAM).
 
 ### 2. De-interleaving
-Interleaving is a technique used at the transmitter to combat **frequency-selective fading**. If a "hole" (deep fade) in the spectrum attenuates several adjacent subcarriers, a block of adjacent bits would be lost. This constitutes a "burst error," which overcomes the error-correcting capability of the Viterbi decoder.
+We analyzed the `deinterleave` function in `decode_mac.cc` to understand its necessity.
 
-* **Why De-interleaving works best with "white noise" type errors:**
-    The Viterbi decoder (convolutional decoding) is mathematically designed to correct *randomly distributed* single-bit errors. It fails catastrophically when faced with a "burst" of errors (many consecutive corrupt bits).
-    The Interleaver permutes (shuffles) the bits across the frequency spectrum before transmission. If a frequency fade destroys a block of adjacent subcarriers (a burst error in the physical channel), the De-interleaver at the receiver reverses the shuffling. This effectively scatters the burst error throughout the entire message.
-    **Result:** One uncorrectable "burst error" is transformed into many small, isolated single-bit errors that appear like random white noise to the decoder. This allows the Viterbi decoder to easily correct them.
+**![Image here: Illustration of how interleaving spreads adjacent bits across different frequencies]**
 
-* **Implementation:** We analyzed the `deinterleave()` function in `decode_mac.cc`, which reverses this process using two mathematical permutations defined in the standard:
-    1.  **First Permutation:** Maps adjacent coded bits onto non-adjacent subcarriers.
-    2.  **Second Permutation:** Ensures adjacent bits are mapped alternately to less and more significant bits of the constellation to avoid long runs of low reliability bits.
+* **What is it?** De-interleaving is the process of reordering bits to reverse the shuffling (interleaving) applied at the transmitter.
+* **Why is it used?** Wireless channels suffer from frequency-selective fading. A deep fade might corrupt a block of adjacent subcarriers, causing a "burst error" of many consecutive corrupted bits. The Viterbi decoder (convolutional decoding) is excellent at fixing random, scattered errors but fails against burst errors.
+* **How it works:** By reversing the transmitter's permutation, the receiver scatters the burst of errors across the entire message. This turns one "fatal" burst into many manageable single-bit errors that the Viterbi decoder can easily fix.
+* **Implementation:** The code uses two permutations: a frequency mapping and a bit mapping (for higher-order modulations like 16-QAM) to place bits back into their original sequence.
 
-### 3. Descrambling
-The final step is descrambling. The transmitter multiplies the data by a pseudo-random sequence generated by a Linear Feedback Shift Register (LFSR) with the polynomial $S(x) = x^7 + x^4 + 1$
+### 3. De-scrambling
+The final physical layer step is de-scrambling.
 
-* **Why Scramble?**
-    1.  **Spectral Flatness:** Prevents long sequences of `0`s or `1`s that would cause sharp spectral spikes (energy concentration).
-    2.  **PAPR Reduction:** Reduces the probability of high Peak-to-Average Power Ratio events in the OFDM signal, which improves amplifier efficiency.
-    3.  **Decoder Performance:** It provides random input statistics. The Viterbi decoder relies on the statistical independence of errors. By ensuring the data stream looks random (white), we avoid "pathological" data patterns that might trip up the decoder or create weak spots in the trellis.
+* **What is it?** The transmitter multiplies the data stream by a pseudo-random sequence generated by a Linear Feedback Shift Register (LFSR) using the polynomial $S(x) = x^7 + x^4 + 1$.
+* **Why is it used?** It "whitens" the spectrum, preventing long sequences of `0`s or `1`s that would cause synchronization loss or high power peaks (PAPR).
+* **How to de-scramble without the seed?** The receiver uses a clever trick involving the **Service Field**. The standard mandates that the first 7 bits of the Data Field must be zeros before scrambling.
+    * Since Scrambling is an XOR operation ($Data \oplus Seed = Output$) and $Data=0$, the received bits *are* the seed ($0 \oplus Seed = Seed$).
+* **Implementation:** The code reads these first 7 bits to initialize its own LFSR state, allowing it to generate the correct key to decode the rest of the payload.
 
-* **The "Service Field" Trick:** The receiver faces a challenge: it needs the initial state (seed) of the scrambler, but this is not explicitly sent in a header field. The protocol solves this with a clever rule: the first 7 bits of the Data field (the **Service Field**) must always be set to zeros by the transmitter before scrambling.
-* **Logic:** Since scrambling is an XOR operation ($Data \oplus Scrambler = Output$), and the data is known to be 0:
-    $$0 \oplus ScramblerState = ScramblerState$$
-    Therefore, the first 7 incoming bits are the scrambler's initial state.
-* **Implementation:** The code reads these first 7 bits to initialize its Linear Feedback Shift Register (LFSR) state, allowing it to perfectly descramble the rest of the packet without a shared secret, in this case is an XOR.
+---
+
+## Framing, Signal Field, and Interoperability
+
+After the physical decoding, we examined how the receiver interprets the frame structure (framing) and validated the system.
+
+### 1. Delimiting the Frame (Signal Field)
+We looked up how the receiver knows where a frame starts and ends.
+
+* **The Signal Field:** This is a single OFDM symbol that immediately follows the preamble.
+* **Information Sent:** It contains the **RATE** (4 bits) and **LENGTH** (12 bits).
+* **Why is this necessary?** The payload (Data Field) can be modulated with high-density schemes (like 64-QAM) that the receiver cannot blindly guess. The Signal Field tells the receiver *how* to demodulate the payload (RATE) and *how long* the frame lasts (LENGTH).
+* **Encoding:** To ensure this critical info is always readable, the Signal Field is always encoded with the most robust settings: **BPSK at rate 1/2**.
+
+### 2. Validation and CRC
+* **CRC Check:** After de-scrambling, the receiver calculates a CRC-32 checksum over the payload. It compares this to the transmitted FCS (Frame Check Sequence). If the residue matches the standard value (558161692), the frame is accepted; otherwise, it is dropped as corrupt.
+* **Interoperability Results:** We tested the receiver with real 802.11a signals.
+    * **Constellations:** We observed clear **16-QAM constellations** (as visualized in our report), proving that the frequency correction and symbol alignment (Sync Short/Long) were successful.
+    **![16_QAM(./Figures/16_QAM)]**
+
+    * **Wireshark:** We piped the decoded PDUs to Wireshark. The receiver successfully parsed Beacon frames, identifying the SSID "raspberrypi" and "UPorto," confirming the entire receive chain is functional.
+    **![wireshark_ssid(./Figures/wireshark_ssid.png)]**
 
 ---
 
