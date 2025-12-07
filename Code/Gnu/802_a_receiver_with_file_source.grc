@@ -42,9 +42,9 @@ blocks:
     min_len: '200'
     orient: QtCore.Qt.Horizontal
     rangeType: int
-    start: '20000000'
-    step: '100000'
-    stop: '5800000000'
+    start: '2400000000'
+    step: '1000000'
+    stop: '5900000000'
     value: '2400000000'
     widget: counter_slider
   states:
