@@ -1,3 +1,12 @@
+The repository is organized into three main sections:
+
+* **Code:** Contains the GNU Radio flowgraphs.
+* **Doc:** Houses the project report, which provides a deep dive into how the protocol works.
+* **Code (Root):** Includes the `test.pcap` file, where captured packets are saved once received through GNU Radio.
+
+This README serves as the project wiki, mirroring the documentation delivered on Moodle by Miguel on moodle.
+
+
 # Week 1 - 20/10/25
 
 This week marked the beginning of the project, focusing on the theoretical foundations of the IEEE 802.11a physical layer and the initial frame detection stage of the GNU Radio receiver. We studied the **OFDM system design parameters** required to configure the receiver and analyzed the receiver's software architecture, specifically the frame detection logic presented in the paper.
