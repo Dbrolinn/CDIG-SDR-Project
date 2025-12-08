@@ -1,11 +1,15 @@
-The repository is organized into three main sections:
+### The repository is organized into two sections:
 
-* **Code:** Contains the GNU Radio flowgraphs.
-* **Doc:** Houses the project report, which provides a deep dive into how the protocol works.
-* **Code (Root):** Includes the `test.pcap` file, where captured packets are saved once received through GNU Radio.
+* **Code:** Contains the GNU Radio project files and a `test.pcap` file with Wireshark packet captures.
+* **Doc:** Houses a very detailed project report, which provides a deep dive analysis of the paper "An IEEE 802.11a/g/p OFDM Receiver for GNU Radio".
+* Check out the report: [Project Report](./doc/IEEE802_11_OFDM_receiver_report.pdf) 
 
 This README serves as the project wiki, mirroring the documentation delivered on Moodle by Miguel on moodle.
 
+### Important References:
+[paper: An IEEE 802.11a/g/p OFDM Receiver for GNU Radio](https://dl.acm.org/doi/10.1145/2491246.2491248)
+
+[GitHub: IEEE 802.11 a/g/p Transceiver](https://github.com/bastibl/gr-ieee802-11) 
 
 # Week 1 - 20/10/25
 
@@ -248,7 +252,7 @@ To solve the alignment problem, the Sync Long block uses a Matched Filter .
     The block convolves the received signal with a known time-domain template of the Long Training Sequence (LTS).
     ```cpp
     // sync_long.cc
-    d_fir.filter(d_correlation, in, ...);
+    d_fir.filterN(d_correlation, in, ...);
     ```
     
 * **Matched Filtering vs. Autocorrelation:**
