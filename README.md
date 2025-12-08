@@ -2,7 +2,7 @@
 
 * **[Code](./Code):** Contains the GNU Radio project files and a `test.pcap` file with Wireshark packet captures.
 * **[Docs](./Docs):** Houses a very detailed project report, which provides a deep dive analysis of the paper "An IEEE 802.11a/g/p OFDM Receiver for GNU Radio".
-* Check out the report: [Project Report](./Docs/IEEE802_11_OFDM_receiver_report.pdf) 
+* Check out the report: [Project Report](https://github.com/Dbrolinn/CDIG-SDR-Project/blob/main/Docs/IEEE802_11_OFDM_receiver.pdf) 
 
 This README serves as the project wiki, mirroring the documentation delivered on Moodle by Miguel on moodle.
 
